@@ -1,0 +1,119 @@
+generator client {
+  provider = "prisma-client"
+  output   = "./generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Category {
+  id       String    @id @default(cuid())
+  name     String
+  slug     String    @unique
+  image    String?
+  icon     String?
+  order    Int       @default(0)
+  products Product[]
+}
+
+model Product {
+  id           String        @id @default(cuid())
+  ref          String?
+  name         String
+  slug         String        @unique
+  description  String
+  details      String?
+  care         String?
+  price        Float
+  comparePrice Float?
+  image        String
+  images       String[]
+  tags         String[]
+  isNew        Boolean       @default(false)
+  rating       Float         @default(0)
+  weight       Float         @default(0.5)
+  width        Int           @default(20)
+  height       Int           @default(15)
+  length       Int           @default(20)
+  active       Boolean       @default(true)
+  categoryId   String
+  category     Category      @relation(fields: [categoryId], references: [id])
+  colors       ColorVariant[]
+  sizes        String[]
+  orderItems   OrderItem[]
+}
+
+model ColorVariant {
+  id        String  @id @default(cuid())
+  hex       String
+  name      String
+  thumb     String
+  image     String?
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+model Banner {
+  id           String   @id @default(cuid())
+  image        String
+  mobileImages String[]
+  title        String
+  subtitle     String?
+  cta          String?
+  ctaLink      String?
+  active       Boolean  @default(true)
+  order        Int      @default(0)
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  customerName    String
+  customerEmail   String
+  customerPhone   String
+  cep             String
+  endereco        String
+  numero          String
+  bairro          String
+  cidade          String
+  estado          String
+  complemento     String?
+  shippingCarrier String?
+  shippingPrice   Float       @default(0)
+  shippingDelivery Int?
+  discount        Float       @default(0)
+  total           Float
+  status          String      @default("pending")
+  createdAt       DateTime    @default(now())
+  items           OrderItem[]
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id])
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id])
+  name      String
+  price     Float
+  image     String
+  size      String?
+  color     String?
+  quantity  Int
+}
+
+model Coupon {
+  id             String    @id @default(cuid())
+  code           String    @unique
+  discountPercent Float
+  maxUses        Int       @default(0)
+  usedCount      Int       @default(0)
+  expiresAt      DateTime?
+  active         Boolean   @default(true)
+}
+
+model Setting {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+}
