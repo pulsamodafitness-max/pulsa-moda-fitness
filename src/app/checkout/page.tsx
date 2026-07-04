@@ -6,10 +6,10 @@ import { Navbar } from "@/components/layout/navbar"
 import { Footer } from "@/components/layout/footer"
 import { CheckoutForm, type CustomerData } from "@/components/checkout/checkout-form"
 import { OrderSummary } from "@/components/checkout/order-summary"
+import { PaymentBrick } from "@/components/checkout/payment-brick"
 import { Button } from "@/components/ui/button"
 import { useCart } from "@/contexts/cart-context"
-import { useToast } from "@/contexts/toast-context"
-import { Truck } from "lucide-react"
+import { Truck, Loader2, AlertCircle } from "lucide-react"
 
 interface ShippingOption {
   id: number
@@ -33,14 +33,18 @@ const defaultCustomer: CustomerData = {
   complemento: "",
 }
 
+type CheckoutStep = "form" | "loading" | "payment" | "error"
+
 export default function CheckoutPage() {
   const router = useRouter()
-  const { state } = useCart()
-  const { showToast } = useToast()
+  const { state, clearCart } = useCart()
   const [customer, setCustomer] = useState<CustomerData>(defaultCustomer)
   const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([])
   const [selectedShipping, setSelectedShipping] = useState<ShippingOption | null>(null)
   const [shippingLoading, setShippingLoading] = useState(false)
+  const [step, setStep] = useState<CheckoutStep>("form")
+  const [preferenceId, setPreferenceId] = useState<string | null>(null)
+  const [errorMsg, setErrorMsg] = useState("")
 
   const handleCepChange = useCallback(async (cep: string) => {
     const digits = cep.replace(/\D/g, "")
@@ -79,6 +83,58 @@ export default function CheckoutPage() {
     }
   }, [state.items])
 
+  async function handleSubmit() {
+    if (!customer.nome || !customer.email) {
+      setErrorMsg("Preencha nome e email")
+      setStep("error")
+      return
+    }
+
+    setStep("loading")
+    setErrorMsg("")
+
+    try {
+      const res = await fetch("/api/create-preference", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: state.items.map((item) => ({
+            id: item.productId,
+            name: item.name,
+            price: item.price,
+            image: item.image,
+            size: item.size,
+            color: item.color,
+            quantity: item.quantity,
+          })),
+          customer,
+          shipping: selectedShipping
+            ? {
+                carrier: selectedShipping.carrier,
+                price: selectedShipping.price,
+                delivery: selectedShipping.delivery,
+              }
+            : null,
+          discount: 0,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setErrorMsg(data.error || "Erro ao processar pagamento")
+        setStep("error")
+        return
+      }
+
+      setPreferenceId(data.preferenceId)
+      setStep("payment")
+    } catch {
+      setErrorMsg("Erro de conexão. Tente novamente.")
+      setStep("error")
+    }
+  }
+
   if (state.items.length === 0) {
     return (
       <>
@@ -97,8 +153,26 @@ export default function CheckoutPage() {
     )
   }
 
-  function handleSubmit() {
-    showToast("Pedido simulado com sucesso!")
+  if (step === "payment" && preferenceId) {
+    return (
+      <>
+        <Navbar />
+        <main className="flex-1">
+          <div className="mx-auto max-w-[1920px] px-4 sm:px-6 lg:px-8 py-8">
+            <div className="mb-6">
+              <p className="text-sm text-muted-foreground">
+                Home / Carrinho / Checkout / <span className="text-foreground">Pagamento</span>
+              </p>
+            </div>
+            <div className="max-w-2xl mx-auto">
+              <h1 className="text-xl font-bold mb-6">Finalize seu pagamento</h1>
+              <PaymentBrick preferenceId={preferenceId} />
+            </div>
+          </div>
+        </main>
+        <Footer />
+      </>
+    )
   }
 
   return (
@@ -111,6 +185,13 @@ export default function CheckoutPage() {
               Home / Carrinho / <span className="text-foreground">Checkout</span>
             </p>
           </div>
+
+          {step === "error" && errorMsg && (
+            <div className="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 flex items-center gap-3 text-red-700 text-sm">
+              <AlertCircle size={18} />
+              {errorMsg}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12">
             <div className="lg:col-span-3">
@@ -168,9 +249,17 @@ export default function CheckoutPage() {
                 <OrderSummary shipping={selectedShipping?.price ?? 0} />
                 <Button
                   onClick={handleSubmit}
+                  disabled={step === "loading"}
                   className="w-full h-12 text-sm mt-6"
                 >
-                  Finalizar Pagamento
+                  {step === "loading" ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 size={16} className="animate-spin" />
+                      Processando...
+                    </span>
+                  ) : (
+                    "Finalizar Pagamento"
+                  )}
                 </Button>
                 <p className="text-[11px] text-muted-foreground text-center mt-3">
                   Pagamento processado com segurança via Mercado Pago
